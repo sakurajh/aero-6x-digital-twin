@@ -6,6 +6,12 @@
 
 ![默认视图](preview.png)
 
+## 功能演示
+
+![关节驱动、爆炸分层、透视与剖面](demo/aero-6x-modes-csdn.gif)
+
+完整 53 秒演示：[demo/aero-6x-demo.mp4](demo/aero-6x-demo.mp4)
+
 ## 功能
 
 | 模块 | 能力 |
