@@ -1,0 +1,2334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AERO-6X 工业六轴机械臂 3D 数字孪生展示系统</title>
+  <script src="vendor/tailwind-3.4.17.js"></script>
+  <script src="vendor/three.min.js"></script>
+  <link href="vendor/fonts.css" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; user-select: none; }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #070b14;
+      color: #e2e8f0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .font-mono-tech {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.35); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.65); }
+
+    /* Custom Range Input */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+      margin-top: -6px;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+      background: #7dd3fc;
+    }
+    .range-amber::-webkit-slider-thumb {
+      background: #f59e0b !important;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.8) !important;
+    }
+    .range-rose::-webkit-slider-thumb {
+      background: #f43f5e !important;
+      box-shadow: 0 0 10px rgba(244, 63, 94, 0.8) !important;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+      box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.65);
+    }
+    .hud-badge {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .mode-card-active {
+      border-color: #38bdf8 !important;
+      background: rgba(14, 116, 144, 0.25) !important;
+      box-shadow: inset 0 0 15px rgba(56, 189, 248, 0.18);
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .annotation-pin {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 15;
+    }
+    .annotation-pin:hover {
+      transform: translate(-50%, -50%) scale(1.12);
+      z-index: 25;
+    }
+  </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden select-none">
+
+  <!-- 3D Viewport Container -->
+  <div id="canvas-container"></div>
+
+  <!-- 3D Dynamic HTML Annotations Container -->
+  <div id="annotations-layer" class="pointer-events-none absolute inset-0 overflow-hidden z-10"></div>
+
+  <!-- Top Header Navigation & Quick Mode Toggles -->
+  <header class="fixed top-0 left-0 right-0 z-30 px-3 py-2.5 sm:px-5 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <!-- Brand & System Status -->
+    <div class="glass-panel rounded-xl px-3.5 py-2 flex items-center gap-3 pointer-events-auto">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-amber-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
+        <svg class="w-5 h-5 text-slate-950" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-white">AERO-6X 工业机械臂数字孪生</h1>
+          <span class="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono-tech font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>ONLINE
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 hidden sm:block">6-DOF 谐波减速伺服架构 · 爆炸分解 / 透明透视 / 实时剖面</p>
+      </div>
+    </div>
+
+    <!-- Core Feature Quick Switcher Bar -->
+    <div class="glass-panel rounded-xl p-1.5 flex items-center flex-wrap gap-1.5 pointer-events-auto">
+      <button id="quick-explode-btn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700/60">
+        <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+        <span>爆炸分解</span>
+        <span id="badge-explode" class="font-mono-tech text-[10px] px-1.5 py-0.2 rounded bg-slate-900/90 text-amber-400">0%</span>
+      </button>
+
+      <button id="quick-xray-btn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700/60">
+        <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        <span>透明外壳</span>
+        <span id="badge-shell" class="font-mono-tech text-[10px] px-1.5 py-0.2 rounded bg-slate-900/90 text-sky-400">实体</span>
+      </button>
+
+      <button id="quick-section-btn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700/60">
+        <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+        </svg>
+        <span>剖面视图</span>
+        <span id="badge-section" class="font-mono-tech text-[10px] px-1.5 py-0.2 rounded bg-slate-900/90 text-slate-400">OFF</span>
+      </button>
+
+      <button id="quick-pins-btn" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40" title="显示/隐藏3D结构标注点">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+        </svg>
+        <span class="hidden md:inline">标注</span>
+      </button>
+
+      <button id="reset-all-btn" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors" title="复位全部状态">
+        复位
+      </button>
+
+      <button id="toggle-panel-btn" type="button" class="sm:hidden px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-600 text-white">
+        控制台
+      </button>
+    </div>
+  </header>
+
+  <!-- Left HUD: Selected Component Inspector & Telemetry -->
+  <aside class="fixed left-3 sm:left-5 bottom-16 sm:bottom-5 z-20 w-72 sm:w-80 pointer-events-none flex flex-col gap-2.5">
+    <!-- Component Inspector Card -->
+    <div id="inspector-card" class="glass-panel rounded-xl p-3.5 pointer-events-auto transition-all">
+      <div class="flex items-center justify-between border-b border-slate-700/60 pb-2 mb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+          <span class="text-xs font-semibold uppercase tracking-wider text-sky-400">结构部件检视器</span>
+        </div>
+        <span id="part-category-badge" class="text-[10px] font-mono-tech px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">整机系统</span>
+      </div>
+      <h2 id="part-title" class="text-sm font-bold text-white mb-1">AERO-6X 六轴工业机械臂总成</h2>
+      <p id="part-desc" class="text-xs text-slate-300 leading-relaxed mb-3">
+        点击 3D 视图中的任意机械臂部件或标注点，可高亮检视外壳装甲、谐波减速器、无刷空心杯电机、交叉滚子轴承及内部走线束参数。
+      </p>
+      <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-900/75 rounded-lg p-2.5 border border-slate-800/80">
+        <div>
+          <span class="text-slate-400 block">选用材料</span>
+          <span id="part-material" class="font-mono-tech text-slate-200 font-medium">航空铝 7075 / 碳纤维</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block">层级属性</span>
+          <span id="part-layer" class="font-mono-tech text-amber-400 font-medium">外层防护 + 内部精密件</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block">额定扭矩 / 负载</span>
+          <span id="part-spec1" class="font-mono-tech text-sky-300 font-medium">120 N·m / 12 kg</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block">重复定位精度</span>
+          <span id="part-spec2" class="font-mono-tech text-emerald-400 font-medium">±0.02 mm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera Presets Bar -->
+    <div class="glass-panel rounded-xl p-2 flex items-center justify-between gap-1 pointer-events-auto">
+      <span class="text-[11px] text-slate-400 px-1.5 font-medium shrink-0">视角:</span>
+      <button type="button" data-cam="iso" class="cam-preset-btn flex-1 py-1 rounded text-xs bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium hover:bg-sky-500/30 transition">轴测</button>
+      <button type="button" data-cam="front" class="cam-preset-btn flex-1 py-1 rounded text-xs bg-slate-800/70 text-slate-300 hover:bg-slate-700/70 transition">正视</button>
+      <button type="button" data-cam="side" class="cam-preset-btn flex-1 py-1 rounded text-xs bg-slate-800/70 text-slate-300 hover:bg-slate-700/70 transition">侧视</button>
+      <button type="button" data-cam="top" class="cam-preset-btn flex-1 py-1 rounded text-xs bg-slate-800/70 text-slate-300 hover:bg-slate-700/70 transition">俯视</button>
+      <button type="button" data-cam="wrist" class="cam-preset-btn flex-1 py-1 rounded text-xs bg-slate-800/70 text-slate-300 hover:bg-slate-700/70 transition">腕部特写</button>
+    </div>
+  </aside>
+
+  <!-- Right Main Engineering Control Dock -->
+  <aside id="control-dock" class="fixed right-3 sm:right-5 top-16 sm:top-20 bottom-4 z-30 w-80 sm:w-96 flex flex-col glass-panel rounded-2xl overflow-hidden transition-transform duration-300">
+    <!-- Control Dock Tabs -->
+    <div class="grid grid-cols-4 bg-slate-900/90 border-b border-slate-800 p-1 gap-1 shrink-0">
+      <button type="button" data-tab="tab-explode" class="dock-tab-btn py-2 px-1 rounded-lg text-xs font-semibold transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40">
+        爆炸图
+      </button>
+      <button type="button" data-tab="tab-shell" class="dock-tab-btn py-2 px-1 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200">
+        透明外壳
+      </button>
+      <button type="button" data-tab="tab-section" class="dock-tab-btn py-2 px-1 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200">
+        剖面图
+      </button>
+      <button type="button" data-tab="tab-joints" class="dock-tab-btn py-2 px-1 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200">
+        关节驱动
+      </button>
+    </div>
+
+    <!-- Scrollable Tab Content Area -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+      <!-- TAB 1: EXPLODED VIEW (爆炸图) -->
+      <div id="tab-explode" class="dock-tab-panel space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              多级装配爆炸分解视图
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">沿各关节轴向与径向分离外壳护甲、端盖与内部电机齿轮组</p>
+          </div>
+          <span id="explode-Readout" class="font-mono-tech text-sm font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">0%</span>
+        </div>
+
+        <!-- Master Explode Slider -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>整体爆炸分离系数</span>
+            <span class="text-slate-400 font-mono-tech">0% — 100%</span>
+          </div>
+          <input id="explode-slider" type="range" min="0" max="100" value="0" step="1" class="w-full range-amber" />
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            <button type="button" data-explode-preset="0" class="explode-preset-btn py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+              0% 紧固装配
+            </button>
+            <button type="button" data-explode-preset="45" class="explode-preset-btn py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
+              45% 半分解
+            </button>
+            <button type="button" data-explode-preset="100" class="explode-preset-btn py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition">
+              100% 全爆炸
+            </button>
+          </div>
+        </div>
+
+        <!-- Sub-group Explosion Multipliers -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-3">
+          <div class="text-xs font-semibold text-slate-200 flex items-center justify-between">
+            <span>分系统分解权重调节</span>
+            <span class="text-[11px] text-slate-400 font-normal">独立控制各层级分离幅度</span>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-300">外层复合装甲护板 (径向分离)</span>
+              <span id="exp-shell-val" class="font-mono-tech text-sky-400">100%</span>
+            </div>
+            <input id="exp-shell-slider" type="range" min="0" max="150" value="100" class="w-full" />
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-300">谐波减速器与轴承端盖 (轴向分离)</span>
+              <span id="exp-gear-val" class="font-mono-tech text-amber-400">100%</span>
+            </div>
+            <input id="exp-gear-slider" type="range" min="0" max="150" value="100" class="w-full range-amber" />
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-300">末端法兰与气动夹爪指爪</span>
+              <span id="exp-gripper-val" class="font-mono-tech text-emerald-400">100%</span>
+            </div>
+            <input id="exp-gripper-slider" type="range" min="0" max="150" value="100" class="w-full" />
+          </div>
+        </div>
+
+        <!-- Assembly Guide Lines Toggle -->
+        <div class="bg-slate-900/70 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-200">显示爆炸装配引导虚线</div>
+            <div class="text-[11px] text-slate-400">连接爆炸分离后的壳体与母体安装基准轴</div>
+          </div>
+          <input id="toggle-explode-lines" type="checkbox" checked class="w-4 h-4 accent-amber-400 rounded cursor-pointer" />
+        </div>
+      </div>
+
+      <!-- TAB 2: TRANSPARENT SHELL (透明外壳) -->
+      <div id="tab-shell" class="dock-tab-panel hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+              透明外壳与内部透视系统
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">虚化外部铸铝/碳纤维壳体，透视内部定子线圈与谐波柔轮</p>
+          </div>
+          <span id="opacity-readout" class="font-mono-tech text-sm font-bold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-lg border border-sky-500/30">100%</span>
+        </div>
+
+        <!-- Render Mode Cards -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" data-shell-mode="solid" class="shell-mode-btn mode-card-active p-2.5 rounded-xl border border-slate-700/80 bg-slate-900/60 text-left transition">
+            <div class="text-xs font-bold text-white">工业实体外壳</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">100% 金属烤漆不透明</div>
+          </button>
+          <button type="button" data-shell-mode="xray" class="shell-mode-btn p-2.5 rounded-xl border border-slate-700/80 bg-slate-900/60 text-left transition">
+            <div class="text-xs font-bold text-sky-300">半透明光学透视</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">22% 玻璃态透视内胆</div>
+          </button>
+          <button type="button" data-shell-mode="wireframe" class="shell-mode-btn p-2.5 rounded-xl border border-slate-700/80 bg-slate-900/60 text-left transition">
+            <div class="text-xs font-bold text-amber-300">工程拓扑线框</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">外壳网格 + 实体内胆</div>
+          </button>
+          <button type="button" data-shell-mode="hidden" class="shell-mode-btn p-2.5 rounded-xl border border-slate-700/80 bg-slate-900/60 text-left transition">
+            <div class="text-xs font-bold text-emerald-300">剥离全部外壳</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">仅展示骨架、电机与线束</div>
+          </button>
+        </div>
+
+        <!-- Opacity Slider -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>外壳不透明度无级调节</span>
+            <span class="text-slate-400 font-mono-tech">0% (全隐) — 100% (实体)</span>
+          </div>
+          <input id="shell-opacity-slider" type="range" min="0" max="100" value="100" step="1" class="w-full" />
+        </div>
+
+        <!-- Layer Visibility Matrix -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="text-xs font-semibold text-slate-200 mb-1">内部核心子系统可见性过滤</div>
+
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-xs text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-orange-400 inline-block"></span>
+              无刷伺服电机 (铜绕组定子 / 磁钢转子)
+            </span>
+            <input type="checkbox" id="vis-motors" checked class="w-4 h-4 accent-sky-400 rounded" />
+          </label>
+
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-xs text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-amber-300 inline-block"></span>
+              谐波减速器与交叉滚子轴承
+            </span>
+            <input type="checkbox" id="vis-gears" checked class="w-4 h-4 accent-sky-400 rounded" />
+          </label>
+
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-xs text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-slate-300 inline-block"></span>
+              高刚性桁架内骨骼连杆
+            </span>
+            <input type="checkbox" id="vis-skeleton" checked class="w-4 h-4 accent-sky-400 rounded" />
+          </label>
+
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-xs text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-cyan-400 inline-block"></span>
+              内部高速 EtherCAT 总线与动力线束
+            </span>
+            <input type="checkbox" id="vis-cables" checked class="w-4 h-4 accent-sky-400 rounded" />
+          </label>
+        </div>
+      </div>
+
+      <!-- TAB 3: CROSS-SECTION VIEW (剖面图) -->
+      <div id="tab-section" class="dock-tab-panel hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+              实时三维激光剖面系统
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">动态平面裁剪内外腔体，观察关节同轴装配与壁厚关系</p>
+          </div>
+          <label class="inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="section-enable-toggle" class="sr-only peer" />
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all relative peer-checked:bg-rose-500"></div>
+          </label>
+        </div>
+
+        <!-- Axis Selector -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-300">剖切法线平面方向</span>
+            <button id="section-flip-btn" type="button" class="px-2.5 py-1 rounded text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-500/30 transition">
+              ⇄ 反转剖切方向
+            </button>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-axis="x" class="section-axis-btn py-2 rounded-lg text-xs font-mono-tech font-bold bg-rose-500/25 text-rose-300 border border-rose-500/50 transition">
+              X 轴 (纵剖面)
+            </button>
+            <button type="button" data-axis="y" class="section-axis-btn py-2 rounded-lg text-xs font-mono-tech font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition">
+              Y 轴 (水平剖)
+            </button>
+            <button type="button" data-axis="z" class="section-axis-btn py-2 rounded-lg text-xs font-mono-tech font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition">
+              Z 轴 (侧剖面)
+            </button>
+          </div>
+        </div>
+
+        <!-- Section Plane Offset Slider -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">剖切平面空间位置偏移</span>
+            <span id="section-pos-readout" class="font-mono-tech text-rose-400 font-bold">0.00 m</span>
+          </div>
+          <input id="section-pos-slider" type="range" min="-350" max="450" value="0" step="1" class="w-full range-rose" />
+          <div class="flex justify-between text-[11px] text-slate-400">
+            <button type="button" id="section-center-btn" class="text-rose-400 hover:underline">归零对齐主轴中心 (0.00m)</button>
+            <span>范围: -3.5m ~ +4.5m</span>
+          </div>
+        </div>
+
+        <!-- Section Visual Helpers -->
+        <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <label class="flex items-center justify-between cursor-pointer">
+            <div>
+              <div class="text-xs font-medium text-slate-200">显示激光剖切基准辅助面</div>
+              <div class="text-[11px] text-slate-400">在三维空间绘制半透明激光网格参考平面</div>
+            </div>
+            <input type="checkbox" id="section-helper-toggle" checked class="w-4 h-4 accent-rose-500 rounded" />
+          </label>
+
+          <label class="flex items-center justify-between cursor-pointer pt-1 border-t border-slate-800/80">
+            <div>
+              <div class="text-xs font-medium text-slate-200">内腔剖切面高亮着色</div>
+              <div class="text-[11px] text-slate-400">使用工程绯红/琥珀色强化被切开的内壁材质对比</div>
+            </div>
+            <input type="checkbox" id="section-highlight-toggle" checked class="w-4 h-4 accent-rose-500 rounded" />
+          </label>
+        </div>
+      </div>
+
+      <!-- TAB 4: 6-DOF JOINT KINEMATICS (关节驱动) -->
+      <div id="tab-joints" class="dock-tab-panel hidden space-y-3.5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              6-DOF 关节运动学与夹爪控制
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">支持在爆炸图、透明外壳或剖面开启状态下实时联动</p>
+          </div>
+          <button id="auto-demo-btn" type="button" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition">
+            ▶ 自动巡航
+          </button>
+        </div>
+
+        <!-- 6 Joint Sliders -->
+        <div class="bg-slate-900/70 p-3 rounded-xl border border-slate-800 space-y-2.5">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">J1 腰部回转基座 (Base Yaw)</span>
+              <span id="j1-val" class="font-mono-tech text-sky-400">25°</span>
+            </div>
+            <input type="range" id="j1-slider" min="-180" max="180" value="25" class="w-full" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">J2 肩部俯仰主轴 (Shoulder Pitch)</span>
+              <span id="j2-val" class="font-mono-tech text-sky-400">-20°</span>
+            </div>
+            <input type="range" id="j2-slider" min="-95" max="95" value="-20" class="w-full" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">J3 肘部俯仰关节 (Elbow Pitch)</span>
+              <span id="j3-val" class="font-mono-tech text-sky-400">45°</span>
+            </div>
+            <input type="range" id="j3-slider" min="-120" max="120" value="45" class="w-full" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">J4 小臂回转关节 (Forearm Roll)</span>
+              <span id="j4-val" class="font-mono-tech text-sky-400">0°</span>
+            </div>
+            <input type="range" id="j4-slider" min="-180" max="180" value="0" class="w-full" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">J5 腕部摆动关节 (Wrist Pitch)</span>
+              <span id="j5-val" class="font-mono-tech text-sky-400">35°</span>
+            </div>
+            <input type="range" id="j5-slider" min="-125" max="125" value="35" class="w-full" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300 font-medium">J6 末端法兰旋转 (Flange Roll)</span>
+              <span id="j6-val" class="font-mono-tech text-sky-400">0°</span>
+            </div>
+            <input type="range" id="j6-slider" min="-360" max="360" value="0" class="w-full" />
+          </div>
+
+          <div class="pt-1 border-t border-slate-800">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-amber-300 font-medium">气动平行夹爪行程 (Gripper Stroke)</span>
+              <span id="grip-val" class="font-mono-tech text-amber-400">60%</span>
+            </div>
+            <input type="range" id="grip-slider" min="0" max="100" value="60" class="w-full range-amber" />
+          </div>
+        </div>
+
+        <button id="home-pose-btn" type="button" class="w-full py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          恢复标准零位姿态 (Home Pose)
+        </button>
+      </div>
+
+      <!-- Combined Showcase Presets Footer inside Dock -->
+      <div class="pt-2 border-t border-slate-800/90">
+        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">一键工程演示场景预设</div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button type="button" data-combo="standard" class="combo-preset-btn py-1.5 px-2 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700/70 text-left">
+            01. 整机标准出厂态
+          </button>
+          <button type="button" data-combo="exploded-xray" class="combo-preset-btn py-1.5 px-2 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 border border-slate-700/70 text-left">
+            02. 全爆炸 + 半透明壳
+          </button>
+          <button type="button" data-combo="internal-cut" class="combo-preset-btn py-1.5 px-2 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700/80 text-rose-300 border border-slate-700/70 text-left">
+            03. 中心纵剖面透视
+          </button>
+          <button type="button" data-combo="kinematic-xray" class="combo-preset-btn py-1.5 px-2 rounded-lg text-xs bg-slate-800/80 hover:bg-slate-700/80 text-sky-300 border border-slate-700/70 text-left">
+            04. 透明运动学巡航
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- Bottom Interaction Hint Pill -->
+  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none hidden md:flex items-center gap-4 px-4 py-1.5 rounded-full hud-badge text-[11px] text-slate-400">
+    <span><strong class="text-slate-200">左键拖拽:</strong> 360° 轨道旋转</span>
+    <span><strong class="text-slate-200">右键拖拽:</strong> 空间平移</span>
+    <span><strong class="text-slate-200">滚轮:</strong> 无级缩放</span>
+    <span><strong class="text-sky-400">点击零件:</strong> 高亮检视内部结构</span>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ==========================================
+      // 1. STATE & CONFIGURATION
+      // ==========================================
+      const state = {
+        explodeFactor: 0.0,         // 0.0 to 1.0
+        targetExplodeFactor: 0.0,
+        expShellMult: 1.0,
+        expGearMult: 1.0,
+        expGripperMult: 1.0,
+        showExplodeLines: true,
+
+        shellMode: 'solid',         // 'solid' | 'xray' | 'wireframe' | 'hidden'
+        shellOpacity: 1.0,
+        visMotors: true,
+        visGears: true,
+        visSkeleton: true,
+        visCables: true,
+
+        sectionEnabled: false,
+        sectionAxis: 'x',           // 'x' | 'y' | 'z'
+        sectionOffset: 0.0,         // -3.5 to 4.5
+        sectionFlip: false,
+        showSectionHelper: true,
+        sectionHighlight: true,
+
+        showAnnotations: true,
+        autoDemo: false,
+        demoTime: 0,
+
+        joints: {
+          j1: 25,
+          j2: -20,
+          j3: 45,
+          j4: 0,
+          j5: 35,
+          j6: 0,
+          grip: 60
+        },
+        selectedPartId: null
+      };
+
+      // Component Metadata Registry for Interactive Inspection
+      const PART_METADATA = {
+        'base_shell': {
+          title: '高刚性铸造底座装甲外壳 (Base Housing)',
+          category: '外部防护壳体',
+          desc: '采用一体式压铸铝合金与防腐蚀氟碳涂层，内置固定法兰盘及防水航空插头接口，达到 IP67 工业防护等级。',
+          material: 'ADC12 压铸铝合金',
+          layer: '外层可透明/可爆炸壳体',
+          spec1: '壁厚 6.5 mm',
+          spec2: '防护等级 IP67'
+        },
+        'j1_harmonic': {
+          title: 'J1 基座谐波减速器与交叉滚子轴承',
+          category: '核心传动组件',
+          desc: '底座一轴采用大扭矩中空谐波减速器（刚轮、柔轮、波发生器），搭配高刚性交叉滚子轴承承受倾覆力矩。',
+          material: '40CrNiMoA 特种合金钢',
+          layer: '内部精密传动件',
+          spec1: '减速比 120:1',
+          spec2: '额定扭矩 180 N·m'
+        },
+        'j2_motor': {
+          title: 'J2 肩部高功率密度无刷空心杯伺服电机',
+          category: '伺服动力单元',
+          desc: '高槽满率无框永磁同步定子绕组与钕铁硼磁钢转子，配备 23-bit 绝对值光电编码器与失电电磁制动器。',
+          material: '无氧紫铜绕组 / N52H 磁钢',
+          layer: '内部电驱核心',
+          spec1: '额定转速 3500 RPM',
+          spec2: '编码器 23-Bit'
+        },
+        'upper_arm_shell': {
+          title: '大臂轻量化碳纤维-铝镁复合装甲壳 (Upper Arm Cover)',
+          category: '外部防护壳体',
+          desc: '左右对称分体式流线型大臂外壳，通过快拆内六角螺栓锁付于内部桁架梁，兼具电磁屏蔽与散热导流功能。',
+          material: 'T700 碳纤维 + 6061-T6',
+          layer: '外层可透明/可爆炸壳体',
+          spec1: '单件质量 1.15 kg',
+          spec2: '径向爆炸行程 1.4m'
+        },
+        'upper_arm_truss': {
+          title: '大臂拓扑优化空心桁架主梁与内部总线束',
+          category: '内骨骼与线束',
+          desc: '经有限元拓扑优化的中空双轨承力骨架，中央穿设高柔耐折弯 EtherCAT 光纤与 48V 直流母线。',
+          material: '航空铝 7075-T651',
+          layer: '内部承力骨骼',
+          spec1: '抗弯刚度 48 N/μm',
+          spec2: '耐弯折 >2000万次'
+        },
+        'j3_elbow_unit': {
+          title: 'J3 肘部一体化关节模组 (Elbow Actuator)',
+          category: '核心传动组件',
+          desc: '高度集成谐波减速器、力矩传感器、伺服电机与温度监控芯片的模块化关节，两端配精密阳极氧化密封端盖。',
+          material: '钛合金 TC4 / 高强钢',
+          layer: '内部精密传动件',
+          spec1: '峰值扭矩 110 N·m',
+          spec2: '轴向爆炸分离'
+        },
+        'forearm_shell': {
+          title: '小臂分体式精密防护壳体 (Forearm Housing)',
+          category: '外部防护壳体',
+          desc: '包裹 J4 回转传动轴与手腕驱动线缆的上下双片式流线外壳，开启透明模式可直接观察内部同轴传动杆。',
+          material: '6061 阳极氧化铝',
+          layer: '外层可透明/可爆炸壳体',
+          spec1: '壁厚 4.0 mm',
+          spec2: '轻量化减重 38%'
+        },
+        'wrist_module': {
+          title: 'J4/J5/J6 三轴正交手腕模组 (3-Axis Wrist)',
+          category: '手腕精密总成',
+          desc: '紧凑型中空手腕结构，集成微型超薄谐波减速器与锥齿轮副，实现末端 360° 连续回转与高灵敏碰撞检测。',
+          material: '航空铝 7075 / 陶瓷轴承',
+          layer: '外层+内部精密传动',
+          spec1: '重复精度 ±0.015mm',
+          spec2: '中空走线孔 Ø18mm'
+        },
+        'gripper_assembly': {
+          title: '末端智能伺服/气动平行夹爪 (Smart Parallel Gripper)',
+          category: '末端执行器 (EoAT)',
+          desc: '配备激光测距传感器、双向同步齿轮齿条导轨与防滑硅胶包覆指爪，支持夹持力闭环控制与行程无级调节。',
+          material: '硬质阳极氧化铝 / 渗碳钢',
+          layer: '末端执行机构',
+          spec1: '最大夹持力 160 N',
+          spec2: '开合行程 0~80 mm'
+        }
+      };
+
+      // ==========================================
+      // 2. THREE.JS SCENE, CAMERA & RENDERER
+      // ==========================================
+      const container = document.getElementById('canvas-container');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x070b14);
+      scene.fog = new THREE.FogExp2(0x070b14, 0.022);
+
+      const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 120);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.localClippingEnabled = true;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      container.appendChild(renderer.domElement);
+
+      // ==========================================
+      // 3. CUSTOM ORBIT & PAN CAMERA CONTROLLER
+      // ==========================================
+      const camControl = {
+        theta: 0.72,        // horizontal angle (rad)
+        phi: 1.08,          // vertical angle from +Y pole (rad)
+        radius: 11.2,
+        target: new THREE.Vector3(0, 3.1, 0),
+        targetGoal: new THREE.Vector3(0, 3.1, 0),
+        thetaGoal: 0.72,
+        phiGoal: 1.08,
+        radiusGoal: 11.2,
+        isDragging: false,
+        dragMode: 'rotate', // 'rotate' | 'pan'
+        prevX: 0,
+        prevY: 0,
+        downX: 0,
+        downY: 0
+      };
+
+      function updateCameraTransform() {
+        camControl.theta += (camControl.thetaGoal - camControl.theta) * 0.14;
+        camControl.phi += (camControl.phiGoal - camControl.phi) * 0.14;
+        camControl.radius += (camControl.radiusGoal - camControl.radius) * 0.14;
+        camControl.target.lerp(camControl.targetGoal, 0.14);
+
+        const sinPhi = Math.sin(camControl.phi);
+        camera.position.x = camControl.target.x + camControl.radius * sinPhi * Math.sin(camControl.theta);
+        camera.position.y = camControl.target.y + camControl.radius * Math.cos(camControl.phi);
+        camera.position.z = camControl.target.z + camControl.radius * sinPhi * Math.cos(camControl.theta);
+        camera.lookAt(camControl.target);
+      }
+
+      // Pointer & Wheel Listeners
+      const domElem = renderer.domElement;
+      domElem.addEventListener('contextmenu', (e) => e.preventDefault());
+
+      domElem.addEventListener('pointerdown', (e) => {
+        camControl.isDragging = true;
+        camControl.prevX = e.clientX;
+        camControl.prevY = e.clientY;
+        camControl.downX = e.clientX;
+        camControl.downY = e.clientY;
+        camControl.dragMode = (e.button === 2 || e.shiftKey) ? 'pan' : 'rotate';
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!camControl.isDragging) return;
+        const dx = e.clientX - camControl.prevX;
+        const dy = e.clientY - camControl.prevY;
+        camControl.prevX = e.clientX;
+        camControl.prevY = e.clientY;
+
+        if (camControl.dragMode === 'rotate') {
+          camControl.thetaGoal -= dx * 0.0075;
+          camControl.phiGoal = Math.max(0.12, Math.min(Math.PI * 0.49, camControl.phiGoal - dy * 0.0075));
+        } else {
+          const panSpeed = camControl.radius * 0.0014;
+          const forward = new THREE.Vector3().subVectors(camControl.target, camera.position).normalize();
+          const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+          const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+          camControl.targetGoal.addScaledVector(right, -dx * panSpeed);
+          camControl.targetGoal.addScaledVector(up, dy * panSpeed);
+        }
+      });
+
+      window.addEventListener('pointerup', (e) => {
+        if (!camControl.isDragging) return;
+        camControl.isDragging = false;
+        const moveDist = Math.hypot(e.clientX - camControl.downX, e.clientY - camControl.downY);
+        if (moveDist < 5 && e.button === 0) {
+          handleViewportClick(e);
+        }
+      });
+
+      domElem.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        camControl.radiusGoal = Math.max(3.5, Math.min(24.0, camControl.radiusGoal + e.deltaY * 0.006));
+      }, { passive: false });
+
+      // ==========================================
+      // 4. LIGHTING & INDUSTRIAL STAGE ENVIRONMENT
+      // ==========================================
+      const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.65);
+      scene.add(ambientLight);
+
+      const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 0.55);
+      hemiLight.position.set(0, 18, 0);
+      scene.add(hemiLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.25);
+      dirLight1.position.set(9, 14, 10);
+      dirLight1.castShadow = true;
+      dirLight1.shadow.mapSize.width = 2048;
+      dirLight1.shadow.mapSize.height = 2048;
+      dirLight1.shadow.camera.near = 2;
+      dirLight1.shadow.camera.far = 32;
+      const d = 7.5;
+      dirLight1.shadow.camera.left = -d;
+      dirLight1.shadow.camera.right = d;
+      dirLight1.shadow.camera.top = d;
+      dirLight1.shadow.camera.bottom = -d;
+      dirLight1.shadow.bias = -0.0005;
+      scene.add(dirLight1);
+
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.85);
+      rimLight.position.set(-10, 8, -9);
+      scene.add(rimLight);
+
+      const warmLight = new THREE.PointLight(0xf59e0b, 0.7, 18);
+      warmLight.position.set(4, 2.5, -5);
+      scene.add(warmLight);
+
+      // Stage Floor & Pedestal
+      const floorGeo = new THREE.CircleGeometry(14, 64);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x090f1d,
+        roughness: 0.85,
+        metalness: 0.2
+      });
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.receiveShadow = true;
+      scene.add(floorMesh);
+
+      const gridHelper = new THREE.GridHelper(22, 44, 0x1e3a5f, 0x111c30);
+      gridHelper.position.y = 0.01;
+      scene.add(gridHelper);
+
+      // Glowing Calibration Rings on Floor
+      const ringGeo = new THREE.RingGeometry(2.1, 2.15, 64);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.35 });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = -Math.PI / 2;
+      ringMesh.position.y = 0.02;
+      scene.add(ringMesh);
+
+      // ==========================================
+      // 5. CLIPPING PLANE &Materials REGISTRY
+      // ==========================================
+      const clippingPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+
+      // Visual Laser Section Plane Helper
+      const sectionHelperGroup = new THREE.Group();
+      const planeHelperGeo = new THREE.PlaneGeometry(8.5, 8.5, 16, 16);
+      const planeHelperMat = new THREE.MeshBasicMaterial({
+        color: 0xf43f5e,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.11,
+        depthWrite: false
+      });
+      const planeHelperMesh = new THREE.Mesh(planeHelperGeo, planeHelperMat);
+      sectionHelperGroup.add(planeHelperMesh);
+
+      const planeWireGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(8.5, 8.5));
+      const planeWireMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.75 });
+      const planeWireMesh = new THREE.LineSegments(planeWireGeo, planeWireMat);
+      sectionHelperGroup.add(planeWireMesh);
+
+      const innerGrid = new THREE.GridHelper(8.5, 17, 0xf43f5e, 0x881337);
+      innerGrid.rotation.x = Math.PI / 2;
+      innerGrid.material.transparent = true;
+      innerGrid.material.opacity = 0.25;
+      sectionHelperGroup.add(innerGrid);
+
+      sectionHelperGroup.visible = false;
+      scene.add(sectionHelperGroup);
+
+      // Material Catalog (All double-sided so cross-sections reveal realistic internal cavities)
+      const shellMaterials = [];
+      const allClipMaterials = [];
+
+      function registerClipMaterial(mat, isShell = false) {
+        mat.side = THREE.DoubleSide;
+        mat.clipShadows = true;
+        allClipMaterials.push(mat);
+        if (isShell) shellMaterials.push(mat);
+        return mat;
+      }
+
+      // Outer Armor Materials (White/Silver-Blue & Industrial Amber Accents)
+      const matArmorMain = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0xe2e8f0,
+        metalness: 0.35,
+        roughness: 0.28
+      }), true);
+
+      const matArmorAccent = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        metalness: 0.45,
+        roughness: 0.32
+      }), true);
+
+      const matArmorDarkCap = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.6,
+        roughness: 0.35
+      }), true);
+
+      // Internal Structural & Mechanical Materials
+      const matSkeletonAlu = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0x64748b,
+        metalness: 0.82,
+        roughness: 0.30
+      }), false);
+
+      const matDarkSteel = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        metalness: 0.88,
+        roughness: 0.25
+      }), false);
+
+      const matCopperCoil = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0xd97706,
+        metalness: 0.90,
+        roughness: 0.20,
+        emissive: 0x451a03,
+        emissiveIntensity: 0.25
+      }), false);
+
+      const matHarmonicBrass = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        metalness: 0.85,
+        roughness: 0.22
+      }), false);
+
+      const matBearingChrome = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0xf8fafc,
+        metalness: 0.95,
+        roughness: 0.12
+      }), false);
+
+      const matCableCyan = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        metalness: 0.2,
+        roughness: 0.4,
+        emissive: 0x083344,
+        emissiveIntensity: 0.5
+      }), false);
+
+      const matCablePower = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0xf97316,
+        metalness: 0.2,
+        roughness: 0.45
+      }), false);
+
+      const matSensorGlow = registerClipMaterial(new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        emissive: 0x0284c7,
+        emissiveIntensity: 0.9,
+        roughness: 0.1
+      }), false);
+
+      // ==========================================
+      // 6. EXPLODED & LAYER REGISTRATION HELPERS
+      // ==========================================
+      const explodableItems = []; // { mesh, basePos, explodeVec, groupType, guideLine }
+      const layerGroups = {
+        shells: [],
+        motors: [],
+        gears: [],
+        skeleton: [],
+        cables: []
+      };
+      const pickableMeshes = [];
+
+      function registerPart(mesh, options = {}) {
+        const {
+          explodeVec = null,
+          explodeType = 'shell', // 'shell' | 'gear' | 'gripper'
+          layer = null,          // 'shells' | 'motors' | 'gears' | 'skeleton' | 'cables'
+          partId = null
+        } = options;
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        if (partId) {
+          mesh.userData.partId = partId;
+          mesh.traverse((child) => {
+            if (child.isMesh) {
+              child.userData.partId = partId;
+              child.castShadow = true;
+              child.receiveShadow = true;
+              pickableMeshes.push(child);
+            }
+          });
+          if (mesh.isMesh) pickableMeshes.push(mesh);
+        }
+
+        if (layer && layerGroups[layer]) {
+          layerGroups[layer].push(mesh);
+        }
+
+        if (explodeVec && explodeVec.lengthSq() > 0.0001) {
+          const basePos = mesh.position.clone();
+          // Dashed guide line connecting basePos and current pos inside parent space
+          const lineGeo = new THREE.BufferGeometry().setFromPoints([
+            basePos.clone(),
+            basePos.clone()
+          ]);
+          const lineMat = new THREE.LineDashedMaterial({
+            color: explodeType === 'shell' ? 0x38bdf8 : 0xf59e0b,
+            dashSize: 0.08,
+            gapSize: 0.05,
+            transparent: true,
+            opacity: 0.65
+          });
+          const guideLine = new THREE.Line(lineGeo, lineMat);
+          guideLine.computeLineDistances();
+          guideLine.visible = false;
+          if (mesh.parent) {
+            mesh.parent.add(guideLine);
+          }
+
+          explodableItems.push({
+            mesh,
+            basePos,
+            explodeVec: explodeVec.clone(),
+            explodeType,
+            guideLine
+          });
+        }
+
+        return mesh;
+      }
+
+      // Procedural Geometry Builders for High-Detail Internal & External Parts
+      function createHollowShellCylinder(rTop, rBot, height, thickness, radialSegs = 32, thetaStart = 0, thetaLength = Math.PI * 2, mat = matArmorMain) {
+        const group = new THREE.Group();
+        const outerGeo = new THREE.CylinderGeometry(rTop, rBot, height, radialSegs, 1, false, thetaStart, thetaLength);
+        const innerGeo = new THREE.CylinderGeometry(Math.max(0.05, rTop - thickness), Math.max(0.05, rBot - thickness), height * 0.98, radialSegs, 1, false, thetaStart, thetaLength);
+        const outerMesh = new THREE.Mesh(outerGeo, mat);
+        const innerMesh = new THREE.Mesh(innerGeo, mat);
+        group.add(outerMesh, innerMesh);
+        return group;
+      }
+
+      function createServoMotorUnit(radius, length, partId) {
+        const motorGroup = new THREE.Group();
+
+        // Dark Steel Slotted Stator Core
+        const coreGeo = new THREE.CylinderGeometry(radius, radius, length, 24);
+        const coreMesh = new THREE.Mesh(coreGeo, matDarkSteel);
+        motorGroup.add(coreMesh);
+
+        // Copper Stator Windings (Upper & Lower Coil Crowns)
+        const coilTorusGeo = new THREE.TorusGeometry(radius * 0.72, radius * 0.22, 12, 24);
+        const coilTop = new THREE.Mesh(coilTorusGeo, matCopperCoil);
+        coilTop.rotation.x = Math.PI / 2;
+        coilTop.position.y = length * 0.45;
+        motorGroup.add(coilTop);
+
+        const coilBot = new THREE.Mesh(coilTorusGeo, matCopperCoil);
+        coilBot.rotation.x = Math.PI / 2;
+        coilBot.position.y = -length * 0.45;
+        motorGroup.add(coilBot);
+
+        // Copper Axial Slots around stator
+        for (let i = 0; i < 8; i++) {
+          const angle = (i / 8) * Math.PI * 2;
+          const barGeo = new THREE.BoxGeometry(radius * 0.16, length * 0.88, radius * 0.18);
+          const bar = new THREE.Mesh(barGeo, matCopperCoil);
+          bar.position.set(Math.cos(angle) * (radius * 0.88), 0, Math.sin(angle) * (radius * 0.88));
+          bar.rotation.y = -angle;
+          motorGroup.add(bar);
+        }
+
+        // Inner Hollow Rotor Shaft
+        const shaftGeo = new THREE.CylinderGeometry(radius * 0.42, radius * 0.42, length * 1.35, 20);
+        const shaftMesh = new THREE.Mesh(shaftGeo, matBearingChrome);
+        motorGroup.add(shaftMesh);
+
+        // Optical Encoder Disc at rear
+        const encGeo = new THREE.CylinderGeometry(radius * 0.82, radius * 0.82, length * 0.12, 24);
+        const encMesh = new THREE.Mesh(encGeo, matSensorGlow);
+        encMesh.position.y = -length * 0.58;
+        motorGroup.add(encMesh);
+
+        motorGroup.userData.partId = partId;
+        return motorGroup;
+      }
+
+      function createHarmonicGearUnit(radius, width, partId) {
+        const gearGroup = new THREE.Group();
+
+        // Circular Spline (Outer Ring)
+        const outerRingGeo = new THREE.CylinderGeometry(radius, radius, width, 28);
+        const outerRing = new THREE.Mesh(outerRingGeo, matHarmonicBrass);
+        gearGroup.add(outerRing);
+
+        // Gear Teeth Fin Ring
+        for (let i = 0; i < 12; i++) {
+          const ang = (i / 12) * Math.PI * 2;
+          const toothGeo = new THREE.BoxGeometry(radius * 0.15, width * 1.04, radius * 2.06);
+          const tooth = new THREE.Mesh(toothGeo, matHarmonicBrass);
+          tooth.rotation.y = ang;
+          gearGroup.add(tooth);
+        }
+
+        // Crossed Roller Bearing Race + Steel Balls
+        const raceGeo = new THREE.TorusGeometry(radius * 0.86, width * 0.22, 12, 28);
+        const race = new THREE.Mesh(raceGeo, matBearingChrome);
+        race.rotation.x = Math.PI / 2;
+        gearGroup.add(race);
+
+        const ballCount = 14;
+        const ballGeo = new THREE.SphereGeometry(width * 0.25, 10, 10);
+        for (let i = 0; i < ballCount; i++) {
+          const a = (i / ballCount) * Math.PI * 2;
+          const ball = new THREE.Mesh(ballGeo, matBearingChrome);
+          ball.position.set(Math.cos(a) * radius * 0.92, 0, Math.sin(a) * radius * 0.92);
+          gearGroup.add(ball);
+        }
+
+        gearGroup.userData.partId = partId;
+        return gearGroup;
+      }
+
+      // ==========================================
+      // 7. BUILD 6-DOF ROBOTIC ARM HIERARCHY
+      // ==========================================
+      const robotRoot = new THREE.Group();
+      scene.add(robotRoot);
+
+      // ---- 7.1 BASE PEDESTAL (Fixed J0) ----
+      const baseGroup = new THREE.Group();
+      robotRoot.add(baseGroup);
+
+      // Heavy Internal Cast Core
+      const baseCore = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.92, 1.18, 0.72, 32),
+        matSkeletonAlu
+      );
+      baseCore.position.y = 0.36;
+      baseGroup.add(baseCore);
+      registerPart(baseCore, { layer: 'skeleton', partId: 'base_shell' });
+
+      // Base Mounting Flange Bolts (8x)
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 12), matBearingChrome);
+        bolt.position.set(Math.cos(a) * 1.26, 0.09, Math.sin(a) * 1.26);
+        baseGroup.add(bolt);
+        registerPart(bolt, {
+          explodeVec: new THREE.Vector3(Math.cos(a) * 0.35, 0.45, Math.sin(a) * 0.35),
+          explodeType: 'gear',
+          layer: 'gears',
+          partId: 'base_shell'
+        });
+      }
+
+      // Base Left & Right Split Armor Shells (Explode radially along X/Z)
+      const baseShellLeft = createHollowShellCylinder(1.08, 1.38, 0.78, 0.11, 28, 0, Math.PI, matArmorMain);
+      baseShellLeft.position.y = 0.39;
+      baseGroup.add(baseShellLeft);
+      registerPart(baseShellLeft, {
+        explodeVec: new THREE.Vector3(0, 0, 1.15),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'base_shell'
+      });
+
+      const baseShellRight = createHollowShellCylinder(1.08, 1.38, 0.78, 0.11, 28, Math.PI, Math.PI, matArmorMain);
+      baseShellRight.position.y = 0.39;
+      baseGroup.add(baseShellRight);
+      registerPart(baseShellRight, {
+        explodeVec: new THREE.Vector3(0, 0, -1.15),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'base_shell'
+      });
+
+      // Base Rear Junction Box Cover
+      const junctionBox = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.42, 0.55), matArmorDarkCap);
+      junctionBox.position.set(-1.12, 0.38, 0);
+      baseGroup.add(junctionBox);
+      registerPart(junctionBox, {
+        explodeVec: new THREE.Vector3(-1.1, 0, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'base_shell'
+      });
+
+      // J1 Base Servo Motor & Harmonic Drive inside Pedestal
+      const j1Motor = createServoMotorUnit(0.56, 0.55, 'j1_harmonic');
+      j1Motor.position.y = 0.42;
+      baseGroup.add(j1Motor);
+      registerPart(j1Motor, {
+        explodeVec: new THREE.Vector3(0, -0.35, 0),
+        explodeType: 'gear',
+        layer: 'motors',
+        partId: 'j1_harmonic'
+      });
+
+      const j1Harmonic = createHarmonicGearUnit(0.82, 0.22, 'j1_harmonic');
+      j1Harmonic.position.y = 0.82;
+      baseGroup.add(j1Harmonic);
+      registerPart(j1Harmonic, {
+        explodeVec: new THREE.Vector3(0, 0.45, 0),
+        explodeType: 'gear',
+        layer: 'gears',
+        partId: 'j1_harmonic'
+      });
+
+      // ---- 7.2 JOINT 1: WAIST TURRET (Rotates around Y) ----
+      const j1Group = new THREE.Group();
+      j1Group.position.set(0, 0.92, 0);
+      baseGroup.add(j1Group);
+
+      // Internal Turret Yoke Frame
+      const turretFrame = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.84, 0.95, 24), matSkeletonAlu);
+      turretFrame.position.y = 0.48;
+      j1Group.add(turretFrame);
+      registerPart(turretFrame, { layer: 'skeleton', partId: 'j1_harmonic' });
+
+      // Turret Left & Right Armor Covers
+      const turretShellL = createHollowShellCylinder(0.88, 0.98, 1.05, 0.09, 24, -Math.PI / 2, Math.PI, matArmorMain);
+      turretShellL.position.y = 0.52;
+      j1Group.add(turretShellL);
+      registerPart(turretShellL, {
+        explodeVec: new THREE.Vector3(1.1, 0.15, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'base_shell'
+      });
+
+      const turretShellR = createHollowShellCylinder(0.88, 0.98, 1.05, 0.09, 24, Math.PI / 2, Math.PI, matArmorMain);
+      turretShellR.position.y = 0.52;
+      j1Group.add(turretShellR);
+      registerPart(turretShellR, {
+        explodeVec: new THREE.Vector3(-1.1, 0.15, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'base_shell'
+      });
+
+      // J2 Shoulder Servo Motor & Harmonic Gear (Aligned along Z axis at y=1.05)
+      const j2Motor = createServoMotorUnit(0.54, 0.78, 'j2_motor');
+      j2Motor.rotation.x = Math.PI / 2;
+      j2Motor.position.set(0, 1.05, -0.15);
+      j1Group.add(j2Motor);
+      registerPart(j2Motor, {
+        explodeVec: new THREE.Vector3(0, 0, -0.95),
+        explodeType: 'gear',
+        layer: 'motors',
+        partId: 'j2_motor'
+      });
+
+      const j2Harmonic = createHarmonicGearUnit(0.68, 0.22, 'j2_motor');
+      j2Harmonic.rotation.x = Math.PI / 2;
+      j2Harmonic.position.set(0, 1.05, 0.42);
+      j1Group.add(j2Harmonic);
+      registerPart(j2Harmonic, {
+        explodeVec: new THREE.Vector3(0, 0, 0.85),
+        explodeType: 'gear',
+        layer: 'gears',
+        partId: 'j2_motor'
+      });
+
+      // Shoulder Decorative End Caps (+Z and -Z)
+      const j2CapFront = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.76, 0.16, 28), matArmorAccent);
+      j2CapFront.rotation.x = Math.PI / 2;
+      j2CapFront.position.set(0, 1.05, 0.82);
+      j1Group.add(j2CapFront);
+      registerPart(j2CapFront, {
+        explodeVec: new THREE.Vector3(0, 0, 1.65),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'j2_motor'
+      });
+
+      const j2CapBack = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.76, 0.16, 28), matArmorDarkCap);
+      j2CapBack.rotation.x = Math.PI / 2;
+      j2CapBack.position.set(0, 1.05, -0.82);
+      j1Group.add(j2CapBack);
+      registerPart(j2CapBack, {
+        explodeVec: new THREE.Vector3(0, 0, -1.65),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'j2_motor'
+      });
+
+      // ---- 7.3 JOINT 2: SHOULDER & UPPER ARM (Rotates around Z at y=1.05) ----
+      const j2Group = new THREE.Group();
+      j2Group.position.set(0, 1.05, 0);
+      j1Group.add(j2Group);
+
+      // Internal Upper Arm Dual Truss Spars (Length = 2.6m)
+      const upperArmTrussGroup = new THREE.Group();
+      const sparLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.55, 0.14), matSkeletonAlu);
+      sparLeft.position.set(-0.24, 1.28, 0);
+      const sparRight = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.55, 0.14), matSkeletonAlu);
+      sparRight.position.set(0.24, 1.28, 0);
+      upperArmTrussGroup.add(sparLeft, sparRight);
+
+      // Cross Bracing Ribs along Upper Arm
+      for (let i = 0; i < 5; i++) {
+        const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.56, 12), matDarkSteel);
+        rib.rotation.z = Math.PI / 2;
+        rib.position.set(0, 0.35 + i * 0.48, 0);
+        upperArmTrussGroup.add(rib);
+      }
+      j2Group.add(upperArmTrussGroup);
+      registerPart(upperArmTrussGroup, { layer: 'skeleton', partId: 'upper_arm_truss' });
+
+      // Internal EtherCAT & Power Harness inside Upper Arm
+      const cableCurve1 = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.08, 0.1, 0.08),
+        new THREE.Vector3(0.10, 0.85, 0.12),
+        new THREE.Vector3(-0.10, 1.75, -0.10),
+        new THREE.Vector3(0.06, 2.50, 0.06)
+      ]);
+      const cableMesh1 = new THREE.Mesh(new THREE.TubeGeometry(cableCurve1, 32, 0.045, 10, false), matCableCyan);
+      j2Group.add(cableMesh1);
+      registerPart(cableMesh1, { layer: 'cables', partId: 'upper_arm_truss' });
+
+      const cableCurve2 = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0.09, 0.1, -0.08),
+        new THREE.Vector3(-0.09, 0.95, -0.12),
+        new THREE.Vector3(0.09, 1.80, 0.10),
+        new THREE.Vector3(-0.06, 2.50, -0.06)
+      ]);
+      const cableMesh2 = new THREE.Mesh(new THREE.TubeGeometry(cableCurve2, 32, 0.04, 10, false), matCablePower);
+      j2Group.add(cableMesh2);
+      registerPart(cableMesh2, { layer: 'cables', partId: 'upper_arm_truss' });
+
+      // Upper Arm Outer Armor Clamshell (Front +Z, Back -Z, Side Accent Strips)
+      const uaShellFront = createHollowShellCylinder(0.48, 0.62, 2.35, 0.07, 24, -Math.PI / 2, Math.PI, matArmorMain);
+      uaShellFront.rotation.y = Math.PI / 2;
+      uaShellFront.position.set(0, 1.30, 0.04);
+      j2Group.add(uaShellFront);
+      registerPart(uaShellFront, {
+        explodeVec: new THREE.Vector3(0, 0, 1.25),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'upper_arm_shell'
+      });
+
+      const uaShellBack = createHollowShellCylinder(0.48, 0.62, 2.35, 0.07, 24, Math.PI / 2, Math.PI, matArmorMain);
+      uaShellBack.rotation.y = Math.PI / 2;
+      uaShellBack.position.set(0, 1.30, -0.04);
+      j2Group.add(uaShellBack);
+      registerPart(uaShellBack, {
+        explodeVec: new THREE.Vector3(0, 0, -1.25),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'upper_arm_shell'
+      });
+
+      // Upper Arm Amber Side Guard Strips (+X and -X)
+      const uaStripL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.85, 0.34), matArmorAccent);
+      uaStripL.position.set(0.54, 1.30, 0);
+      j2Group.add(uaStripL);
+      registerPart(uaStripL, {
+        explodeVec: new THREE.Vector3(1.15, 0, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'upper_arm_shell'
+      });
+
+      const uaStripR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.85, 0.34), matArmorAccent);
+      uaStripR.position.set(-0.54, 1.30, 0);
+      j2Group.add(uaStripR);
+      registerPart(uaStripR, {
+        explodeVec: new THREE.Vector3(-1.15, 0, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'upper_arm_shell'
+      });
+
+      // ---- 7.4 JOINT 3: ELBOW & FOREARM (Rotates around Z at y=2.60) ----
+      const j3Group = new THREE.Group();
+      j3Group.position.set(0, 2.60, 0);
+      j2Group.add(j3Group);
+
+      // J3 Elbow Servo Motor & Harmonic Gear
+      const j3Motor = createServoMotorUnit(0.42, 0.64, 'j3_elbow_unit');
+      j3Motor.rotation.x = Math.PI / 2;
+      j3Motor.position.set(0, 0, -0.10);
+      j3Group.add(j3Motor);
+      registerPart(j3Motor, {
+        explodeVec: new THREE.Vector3(0, 0, -0.85),
+        explodeType: 'gear',
+        layer: 'motors',
+        partId: 'j3_elbow_unit'
+      });
+
+      const j3Harmonic = createHarmonicGearUnit(0.52, 0.18, 'j3_elbow_unit');
+      j3Harmonic.rotation.x = Math.PI / 2;
+      j3Harmonic.position.set(0, 0, 0.32);
+      j3Group.add(j3Harmonic);
+      registerPart(j3Harmonic, {
+        explodeVec: new THREE.Vector3(0, 0, 0.78),
+        explodeType: 'gear',
+        layer: 'gears',
+        partId: 'j3_elbow_unit'
+      });
+
+      // Elbow Housing Shell & End Caps
+      const elbowShell = createHollowShellCylinder(0.56, 0.56, 0.85, 0.07, 24, 0, Math.PI * 2, matArmorMain);
+      elbowShell.rotation.x = Math.PI / 2;
+      j3Group.add(elbowShell);
+      registerPart(elbowShell, {
+        explodeVec: new THREE.Vector3(-0.85, 0.55, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'j3_elbow_unit'
+      });
+
+      const j3CapFront = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.58, 0.14, 24), matArmorAccent);
+      j3CapFront.rotation.x = Math.PI / 2;
+      j3CapFront.position.set(0, 0, 0.52);
+      j3Group.add(j3CapFront);
+      registerPart(j3CapFront, {
+        explodeVec: new THREE.Vector3(0, 0, 1.45),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'j3_elbow_unit'
+      });
+
+      const j3CapBack = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.58, 0.14, 24), matArmorDarkCap);
+      j3CapBack.rotation.x = Math.PI / 2;
+      j3CapBack.position.set(0, 0, -0.52);
+      j3Group.add(j3CapBack);
+      registerPart(j3CapBack, {
+        explodeVec: new THREE.Vector3(0, 0, -1.45),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'j3_elbow_unit'
+      });
+
+      // ---- 7.5 JOINT 4: FOREARM ROLL TUBE (Rotates around X axis, extending +X to 2.15m) ----
+      const j4Group = new THREE.Group();
+      j4Group.position.set(0, 0, 0);
+      j3Group.add(j4Group);
+
+      // J4 Forearm Roll Motor inside Elbow Root
+      const j4Motor = createServoMotorUnit(0.32, 0.52, 'forearm_shell');
+      j4Motor.rotation.z = -Math.PI / 2;
+      j4Motor.position.set(0.55, 0, 0);
+      j4Group.add(j4Motor);
+      registerPart(j4Motor, {
+        explodeVec: new THREE.Vector3(-0.45, 0.45, 0),
+        explodeType: 'gear',
+        layer: 'motors',
+        partId: 'forearm_shell'
+      });
+
+      // Forearm Central Hollow Drive Shaft & Truss
+      const faShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.95, 20), matSkeletonAlu);
+      faShaft.rotation.z = -Math.PI / 2;
+      faShaft.position.set(1.12, 0, 0);
+      j4Group.add(faShaft);
+      registerPart(faShaft, { layer: 'skeleton', partId: 'forearm_shell' });
+
+      // Forearm Spiral Cable Conduit
+      const faCableCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0.25, 0.12, 0.08),
+        new THREE.Vector3(0.85, -0.14, 0.12),
+        new THREE.Vector3(1.45, 0.12, -0.10),
+        new THREE.Vector3(1.98, 0.02, 0.04)
+      ]);
+      const faCable = new THREE.Mesh(new THREE.TubeGeometry(faCableCurve, 28, 0.035, 8, false), matCableCyan);
+      j4Group.add(faCable);
+      registerPart(faCable, { layer: 'cables', partId: 'forearm_shell' });
+
+      // Forearm Top & Bottom Split Armor Shells (Explode along +Y and -Y)
+      const faShellTop = createHollowShellCylinder(0.32, 0.44, 1.68, 0.06, 24, 0, Math.PI, matArmorMain);
+      faShellTop.rotation.z = -Math.PI / 2;
+      faShellTop.position.set(1.18, 0.02, 0);
+      j4Group.add(faShellTop);
+      registerPart(faShellTop, {
+        explodeVec: new THREE.Vector3(0, 1.05, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'forearm_shell'
+      });
+
+      const faShellBot = createHollowShellCylinder(0.32, 0.44, 1.68, 0.06, 24, Math.PI, Math.PI, matArmorMain);
+      faShellBot.rotation.z = -Math.PI / 2;
+      faShellBot.position.set(1.18, -0.02, 0);
+      j4Group.add(faShellBot);
+      registerPart(faShellBot, {
+        explodeVec: new THREE.Vector3(0, -1.05, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'forearm_shell'
+      });
+
+      // Forearm Harmonic Ring Collar
+      const j4Harmonic = createHarmonicGearUnit(0.36, 0.15, 'forearm_shell');
+      j4Harmonic.rotation.z = -Math.PI / 2;
+      j4Harmonic.position.set(1.92, 0, 0);
+      j4Group.add(j4Harmonic);
+      registerPart(j4Harmonic, {
+        explodeVec: new THREE.Vector3(0.45, 0, 0),
+        explodeType: 'gear',
+        layer: 'gears',
+        partId: 'forearm_shell'
+      });
+
+      // ---- 7.6 JOINT 5: WRIST PITCH MODULE (Rotates around Z at x=2.12) ----
+      const j5Group = new THREE.Group();
+      j5Group.position.set(2.12, 0, 0);
+      j4Group.add(j5Group);
+
+      // Wrist Internal Yoke & Motor
+      const j5Motor = createServoMotorUnit(0.26, 0.44, 'wrist_module');
+      j5Motor.rotation.x = Math.PI / 2;
+      j5Group.add(j5Motor);
+      registerPart(j5Motor, {
+        explodeVec: new THREE.Vector3(0, 0, -0.68),
+        explodeType: 'gear',
+        layer: 'motors',
+        partId: 'wrist_module'
+      });
+
+      const j5Harmonic = createHarmonicGearUnit(0.31, 0.14, 'wrist_module');
+      j5Harmonic.rotation.x = Math.PI / 2;
+      j5Harmonic.position.set(0, 0, 0.24);
+      j5Group.add(j5Harmonic);
+      registerPart(j5Harmonic, {
+        explodeVec: new THREE.Vector3(0, 0, 0.65),
+        explodeType: 'gear',
+        layer: 'gears',
+        partId: 'wrist_module'
+      });
+
+      // Wrist Spherical Armor Shell & Side Caps
+      const wristShell = createHollowShellCylinder(0.35, 0.35, 0.56, 0.05, 24, 0, Math.PI * 2, matArmorMain);
+      wristShell.rotation.x = Math.PI / 2;
+      j5Group.add(wristShell);
+      registerPart(wristShell, {
+        explodeVec: new THREE.Vector3(0, 0.78, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'wrist_module'
+      });
+
+      const wristCapL = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.35, 0.10, 20), matArmorAccent);
+      wristCapL.rotation.x = Math.PI / 2;
+      wristCapL.position.set(0, 0, 0.34);
+      j5Group.add(wristCapL);
+      registerPart(wristCapL, {
+        explodeVec: new THREE.Vector3(0, 0, 1.15),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'wrist_module'
+      });
+
+      const wristCapR = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.35, 0.10, 20), matArmorDarkCap);
+      wristCapR.rotation.x = Math.PI / 2;
+      wristCapR.position.set(0, 0, -0.34);
+      j5Group.add(wristCapR);
+      registerPart(wristCapR, {
+        explodeVec: new THREE.Vector3(0, 0, -1.15),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'wrist_module'
+      });
+
+      // Wrist Extension Link to Flange
+      const wristNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.45, 20), matSkeletonAlu);
+      wristNeck.rotation.z = -Math.PI / 2;
+      wristNeck.position.set(0.32, 0, 0);
+      j5Group.add(wristNeck);
+      registerPart(wristNeck, { layer: 'skeleton', partId: 'wrist_module' });
+
+      // ---- 7.7 JOINT 6: END-EFFECTOR FLANGE & SMART GRIPPER (Rotates around X at x=0.58) ----
+      const j6Group = new THREE.Group();
+      j6Group.position.set(0.58, 0, 0);
+      j5Group.add(j6Group);
+
+      // ISO 9409-1 Tool Flange Disc
+      const isoFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.12, 24), matDarkSteel);
+      isoFlange.rotation.z = -Math.PI / 2;
+      isoFlange.position.set(0.06, 0, 0);
+      j6Group.add(isoFlange);
+      registerPart(isoFlange, {
+        explodeVec: new THREE.Vector3(0.45, 0, 0),
+        explodeType: 'gripper',
+        layer: 'gears',
+        partId: 'gripper_assembly'
+      });
+
+      // Gripper Body Actuator Block
+      const gripperCore = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.48, 0.72), matSkeletonAlu);
+      gripperCore.position.set(0.32, 0, 0);
+      j6Group.add(gripperCore);
+      registerPart(gripperCore, {
+        explodeVec: new THREE.Vector3(0.85, 0, 0),
+        explodeType: 'gripper',
+        layer: 'skeleton',
+        partId: 'gripper_assembly'
+      });
+
+      // Gripper Outer Protective Shroud
+      const gripperShroud = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.54, 0.78), matArmorDarkCap);
+      gripperShroud.position.set(0.32, 0, 0);
+      j6Group.add(gripperShroud);
+      registerPart(gripperShroud, {
+        explodeVec: new THREE.Vector3(1.35, 0.45, 0),
+        explodeType: 'shell',
+        layer: 'shells',
+        partId: 'gripper_assembly'
+      });
+
+      // Laser Vision Sensor Module on Gripper Top
+      const visionSensor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.30), matSensorGlow);
+      visionSensor.position.set(0.36, 0.32, 0);
+      j6Group.add(visionSensor);
+      registerPart(visionSensor, {
+        explodeVec: new THREE.Vector3(1.1, 0.75, 0),
+        explodeType: 'gripper',
+        layer: 'motors',
+        partId: 'gripper_assembly'
+      });
+
+      // Left & Right Parallel Gripper Fingers
+      const fingerLeftGroup = new THREE.Group();
+      fingerLeftGroup.position.set(0.62, 0, 0.20);
+      const fingerBaseL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.14, 0.09), matBearingChrome);
+      const fingerTipL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.06), matArmorAccent);
+      fingerTipL.position.set(0.24, 0, -0.02);
+      fingerLeftGroup.add(fingerBaseL, fingerTipL);
+      j6Group.add(fingerLeftGroup);
+      registerPart(fingerLeftGroup, {
+        explodeVec: new THREE.Vector3(1.45, 0, 0.55),
+        explodeType: 'gripper',
+        layer: 'gears',
+        partId: 'gripper_assembly'
+      });
+
+      const fingerRightGroup = new THREE.Group();
+      fingerRightGroup.position.set(0.62, 0, -0.20);
+      const fingerBaseR = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.14, 0.09), matBearingChrome);
+      const fingerTipR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.06), matArmorAccent);
+      fingerTipR.position.set(0.24, 0, 0.02);
+      fingerRightGroup.add(fingerBaseR, fingerTipR);
+      j6Group.add(fingerRightGroup);
+      registerPart(fingerRightGroup, {
+        explodeVec: new THREE.Vector3(1.45, 0, -0.55),
+        explodeType: 'gripper',
+        layer: 'gears',
+        partId: 'gripper_assembly'
+      });
+
+      // ==========================================
+      // 8. 3D FLOATING ANNOTATIONS (HTML OVERLAY)
+      // ==========================================
+      const annotationsLayer = document.getElementById('annotations-layer');
+      const annotationData = [
+        { id: 'base_shell', label: '01 基座装甲与一轴减速器', anchorObj: baseGroup, localOffset: new THREE.Vector3(0, 0.55, 1.1) },
+        { id: 'j2_motor', label: '02 肩部无刷空心杯电机', anchorObj: j1Group, localOffset: new THREE.Vector3(0, 1.15, 0.7) },
+        { id: 'upper_arm_shell', label: '03 大臂复合材料装甲壳', anchorObj: j2Group, localOffset: new THREE.Vector3(0, 1.35, 0.55) },
+        { id: 'j3_elbow_unit', label: '04 肘部谐波减速关节模组', anchorObj: j3Group, localOffset: new THREE.Vector3(0, 0.45, 0.45) },
+        { id: 'forearm_shell', label: '05 小臂中空传动轴与总线', anchorObj: j4Group, localOffset: new THREE.Vector3(1.15, 0.42, 0) },
+        { id: 'gripper_assembly', label: '06 三轴手腕与智能平行夹爪', anchorObj: j6Group, localOffset: new THREE.Vector3(0.45, 0.42, 0) }
+      ];
+
+      const annotationPins = annotationData.map((item) => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'annotation-pin hud-badge px-2.5 py-1 rounded-full text-[11px] font-medium text-slate-100 flex items-center gap-1.5 shadow-lg hover:border-sky-400';
+        el.innerHTML = `<span class="w-2 h-2 rounded-full bg-sky-400"></span><span>${item.label}</span>`;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectPart(item.id);
+        });
+        annotationsLayer.appendChild(el);
+        return { ...item, el };
+      });
+
+      function updateAnnotations() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const worldPos = new THREE.Vector3();
+
+        annotationPins.forEach((pin) => {
+          if (!state.showAnnotations) {
+            pin.el.style.display = 'none';
+            return;
+          }
+          worldPos.copy(pin.localOffset);
+          pin.anchorObj.localToWorld(worldPos);
+          worldPos.project(camera);
+
+          if (worldPos.z > 1.0 || worldPos.z < -1.0) {
+            pin.el.style.display = 'none';
+            return;
+          }
+          const x = (worldPos.x * 0.5 + 0.5) * w;
+          const y = (-worldPos.y * 0.5 + 0.5) * h;
+          pin.el.style.display = 'flex';
+          pin.el.style.left = `${x}px`;
+          pin.el.style.top = `${y}px`;
+        });
+      }
+
+      // ==========================================
+      // 9. CORE SYSTEM UPDATERS (EXPLODE, SHELL, SECTION, JOINTS)
+      // ==========================================
+
+      // 9.1 Update Exploded View Positions
+      function applyExplodedState() {
+        const f = state.explodeFactor;
+        explodableItems.forEach((item) => {
+          let mult = 1.0;
+          if (item.explodeType === 'shell') mult = state.expShellMult;
+          else if (item.explodeType === 'gear') mult = state.expGearMult;
+          else if (item.explodeType === 'gripper') mult = state.expGripperMult;
+
+          const eff = f * mult;
+          item.mesh.position.copy(item.basePos).addScaledVector(item.explodeVec, eff);
+
+          if (item.guideLine) {
+            const showLine = state.showExplodeLines && eff > 0.02 && item.mesh.visible;
+            item.guideLine.visible = showLine;
+            if (showLine) {
+              const positions = item.guideLine.geometry.attributes.position.array;
+              positions[0] = item.basePos.x;
+              positions[1] = item.basePos.y;
+              positions[2] = item.basePos.z;
+              positions[3] = item.mesh.position.x;
+              positions[4] = item.mesh.position.y;
+              positions[5] = item.mesh.position.z;
+              item.guideLine.geometry.attributes.position.needsUpdate = true;
+              item.guideLine.computeLineDistances();
+            }
+          }
+        });
+
+        // Update UI Readouts
+        const pct = Math.round(f * 100);
+        document.getElementById('explode-Readout').textContent = `${pct}%`;
+        document.getElementById('badge-explode').textContent = `${pct}%`;
+        document.getElementById('explode-slider').value = pct;
+
+        const quickExpBtn = document.getElementById('quick-explode-btn');
+        if (pct > 2) {
+          quickExpBtn.classList.add('mode-card-active');
+        } else {
+          quickExpBtn.classList.remove('mode-card-active');
+        }
+      }
+
+      // 9.2 Update Transparent Shell & Layer Visibility
+      function applyShellAndLayerState() {
+        const mode = state.shellMode;
+        const opacity = state.shellOpacity;
+
+        shellMaterials.forEach((mat) => {
+          if (mode === 'solid') {
+            mat.wireframe = false;
+            mat.transparent = opacity < 0.99;
+            mat.opacity = opacity;
+            mat.depthWrite = opacity > 0.65;
+          } else if (mode === 'xray') {
+            mat.wireframe = false;
+            mat.transparent = true;
+            mat.opacity = opacity;
+            mat.depthWrite = false;
+          } else if (mode === 'wireframe') {
+            mat.wireframe = true;
+            mat.transparent = true;
+            mat.opacity = Math.max(0.35, opacity);
+            mat.depthWrite = false;
+          }
+          mat.needsUpdate = true;
+        });
+
+        const showShellMeshes = (mode !== 'hidden') && (opacity > 0.01);
+        layerGroups.shells.forEach((m) => { m.visible = showShellMeshes; });
+        layerGroups.motors.forEach((m) => { m.visible = state.visMotors; });
+        layerGroups.gears.forEach((m) => { m.visible = state.visGears; });
+        layerGroups.skeleton.forEach((m) => { m.visible = state.visSkeleton; });
+        layerGroups.cables.forEach((m) => { m.visible = state.visCables; });
+
+        // Update UI Readouts
+        const pct = Math.round(opacity * 100);
+        document.getElementById('opacity-readout').textContent = `${pct}%`;
+        document.getElementById('shell-opacity-slider').value = pct;
+
+        const modeLabels = { solid: '实体', xray: '透视', wireframe: '线框', hidden: '剥离' };
+        document.getElementById('badge-shell').textContent = modeLabels[mode] || '实体';
+
+        const quickXrayBtn = document.getElementById('quick-xray-btn');
+        if (mode !== 'solid' || opacity < 0.95) {
+          quickXrayBtn.classList.add('mode-card-active');
+        } else {
+          quickXrayBtn.classList.remove('mode-card-active');
+        }
+
+        document.querySelectorAll('.shell-mode-btn').forEach((btn) => {
+          btn.classList.toggle('mode-card-active', btn.dataset.shellMode === mode);
+        });
+      }
+
+      // 9.3 Update Cross-Section Plane & Helper
+      function applySectionState() {
+        const enabled = state.sectionEnabled;
+        const axis = state.sectionAxis;
+        const sign = state.sectionFlip ? 1 : -1;
+        const offsetMeters = state.sectionOffset;
+
+        if (axis === 'x') clippingPlane.normal.set(sign, 0, 0);
+        else if (axis === 'y') clippingPlane.normal.set(0, sign, 0);
+        else clippingPlane.normal.set(0, 0, sign);
+
+        clippingPlane.constant = -sign * offsetMeters;
+
+        const activePlanes = enabled ? [clippingPlane] : [];
+        allClipMaterials.forEach((mat) => {
+          mat.clippingPlanes = activePlanes;
+          if (enabled && state.sectionHighlight && !shellMaterials.includes(mat)) {
+            mat.emissive = mat.emissive || new THREE.Color(0x000000);
+          }
+          mat.needsUpdate = true;
+        });
+
+        // Position Visual Laser Section Plane
+        sectionHelperGroup.visible = enabled && state.showSectionHelper;
+        if (enabled) {
+          sectionHelperGroup.position.set(0, 3.0, 0);
+          sectionHelperGroup.rotation.set(0, 0, 0);
+          if (axis === 'x') {
+            sectionHelperGroup.position.x = offsetMeters;
+            sectionHelperGroup.rotation.y = Math.PI / 2;
+          } else if (axis === 'y') {
+            sectionHelperGroup.position.y = offsetMeters;
+            sectionHelperGroup.rotation.x = Math.PI / 2;
+          } else {
+            sectionHelperGroup.position.z = offsetMeters;
+          }
+        }
+
+        // Update UI Readouts
+        document.getElementById('section-enable-toggle').checked = enabled;
+        document.getElementById('section-pos-readout').textContent = `${offsetMeters >= 0 ? '+' : ''}${offsetMeters.toFixed(2)} m`;
+        document.getElementById('section-pos-slider').value = Math.round(offsetMeters * 100);
+        document.getElementById('badge-section').textContent = enabled ? `${axis.toUpperCase()}轴` : 'OFF';
+        document.getElementById('badge-section').className = enabled
+          ? 'font-mono-tech text-[10px] px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300'
+          : 'font-mono-tech text-[10px] px-1.5 py-0.2 rounded bg-slate-900/90 text-slate-400';
+
+        const quickSecBtn = document.getElementById('quick-section-btn');
+        quickSecBtn.classList.toggle('mode-card-active', enabled);
+
+        document.querySelectorAll('.section-axis-btn').forEach((btn) => {
+          const isCurrent = btn.dataset.axis === axis;
+          btn.className = isCurrent
+            ? 'section-axis-btn py-2 rounded-lg text-xs font-mono-tech font-bold bg-rose-500/25 text-rose-300 border border-rose-500/50 transition'
+            : 'section-axis-btn py-2 rounded-lg text-xs font-mono-tech font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition';
+        });
+      }
+
+      // 9.4 Update 6-DOF Joint Angles & Gripper Stroke
+      function applyJointKinematics() {
+        const deg2rad = Math.PI / 180;
+        j1Group.rotation.y = state.joints.j1 * deg2rad;
+        j2Group.rotation.z = state.joints.j2 * deg2rad;
+        j3Group.rotation.z = state.joints.j3 * deg2rad;
+        j4Group.rotation.x = state.joints.j4 * deg2rad;
+        j5Group.rotation.z = state.joints.j5 * deg2rad;
+        j6Group.rotation.x = state.joints.j6 * deg2rad;
+
+        // Gripper Finger Stroke (0% closed -> 0.05m, 100% open -> 0.28m)
+        const strokeOffset = 0.05 + (state.joints.grip / 100) * 0.23;
+        const baseL = explodableItems.find((it) => it.mesh === fingerLeftGroup);
+        const baseR = explodableItems.find((it) => it.mesh === fingerRightGroup);
+        if (baseL && baseR) {
+          baseL.basePos.z = strokeOffset;
+          baseR.basePos.z = -strokeOffset;
+        }
+        applyExplodedState();
+
+        // Sync Sliders & Labels
+        ['j1', 'j2', 'j3', 'j4', 'j5', 'j6'].forEach((k) => {
+          const val = Math.round(state.joints[k]);
+          document.getElementById(`${k}-val`).textContent = `${val}°`;
+          document.getElementById(`${k}-slider`).value = val;
+        });
+        const gVal = Math.round(state.joints.grip);
+        document.getElementById('grip-val').textContent = `${gVal}%`;
+        document.getElementById('grip-slider').value = gVal;
+      }
+
+      // ==========================================
+      // 10. RAYCASTING & PART SELECTION INSPECTOR
+      // ==========================================
+      const raycaster = new THREE.Raycaster();
+      const pointerNDC = new THREE.Vector2();
+
+      function handleViewportClick(e) {
+        const rect = domElem.getBoundingClientRect();
+        pointerNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointerNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(pointerNDC, camera);
+        const hits = raycaster.intersectObjects(pickableMeshes, true);
+
+        for (let i = 0; i < hits.length; i++) {
+          const hit = hits[i];
+          if (!hit.object.visible) continue;
+          // Respect active clipping plane
+          if (state.sectionEnabled && clippingPlane.distanceToPoint(hit.point) < 0) {
+            continue;
+          }
+          const partId = hit.object.userData.partId;
+          if (partId && PART_METADATA[partId]) {
+            selectPart(partId);
+            return;
+          }
+        }
+      }
+
+      function selectPart(partId) {
+        state.selectedPartId = partId;
+        const meta = PART_METADATA[partId];
+        if (!meta) return;
+
+        document.getElementById('part-title').textContent = meta.title;
+        document.getElementById('part-category-badge').textContent = meta.category;
+        document.getElementById('part-desc').textContent = meta.desc;
+        document.getElementById('part-material').textContent = meta.material;
+        document.getElementById('part-layer').textContent = meta.layer;
+        document.getElementById('part-spec1').textContent = meta.spec1;
+        document.getElementById('part-spec2').textContent = meta.spec2;
+
+        // Visual flash on inspector card
+        const card = document.getElementById('inspector-card');
+        card.classList.add('border-sky-400');
+        setTimeout(() => card.classList.remove('border-sky-400'), 450);
+      }
+
+      // ==========================================
+      // 11. UI EVENT BINDINGS
+      // ==========================================
+
+      // Dock Tab Switching
+      const tabButtons = document.querySelectorAll('.dock-tab-btn');
+      const tabPanels = document.querySelectorAll('.dock-tab-panel');
+
+      function switchTab(targetId) {
+        tabButtons.forEach((btn) => {
+          const active = btn.dataset.tab === targetId;
+          btn.className = active
+            ? 'dock-tab-btn py-2 px-1 rounded-lg text-xs font-semibold transition-all bg-sky-500/20 text-sky-300 border border-sky-500/40'
+            : 'dock-tab-btn py-2 px-1 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200';
+        });
+        tabPanels.forEach((panel) => {
+          panel.classList.toggle('hidden', panel.id !== targetId);
+        });
+      }
+
+      tabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      });
+
+      // Top Header Quick Action Buttons
+      document.getElementById('quick-explode-btn').addEventListener('click', () => {
+        switchTab('tab-explode');
+        state.targetExplodeFactor = state.targetExplodeFactor > 0.1 ? 0.0 : 0.85;
+      });
+
+      document.getElementById('quick-xray-btn').addEventListener('click', () => {
+        switchTab('tab-shell');
+        if (state.shellMode === 'solid') {
+          state.shellMode = 'xray';
+          state.shellOpacity = 0.22;
+        } else {
+          state.shellMode = 'solid';
+          state.shellOpacity = 1.0;
+        }
+        applyShellAndLayerState();
+      });
+
+      document.getElementById('quick-section-btn').addEventListener('click', () => {
+        switchTab('tab-section');
+        state.sectionEnabled = !state.sectionEnabled;
+        applySectionState();
+      });
+
+      document.getElementById('quick-pins-btn').addEventListener('click', (e) => {
+        state.showAnnotations = !state.showAnnotations;
+        e.currentTarget.classList.toggle('bg-sky-500/20', state.showAnnotations);
+        e.currentTarget.classList.toggle('text-sky-300', state.showAnnotations);
+      });
+
+      document.getElementById('toggle-panel-btn').addEventListener('click', () => {
+        const dock = document.getElementById('control-dock');
+        dock.classList.toggle('translate-x-[110%]');
+      });
+
+      // Reset All
+      document.getElementById('reset-all-btn').addEventListener('click', () => {
+        state.targetExplodeFactor = 0.0;
+        state.expShellMult = 1.0;
+        state.expGearMult = 1.0;
+        state.expGripperMult = 1.0;
+        state.shellMode = 'solid';
+        state.shellOpacity = 1.0;
+        state.visMotors = true;
+        state.visGears = true;
+        state.visSkeleton = true;
+        state.visCables = true;
+        state.sectionEnabled = false;
+        state.sectionAxis = 'x';
+        state.sectionOffset = 0.0;
+        state.sectionFlip = false;
+        state.autoDemo = false;
+        updateAutoDemoButton();
+        state.joints = { j1: 25, j2: -20, j3: 45, j4: 0, j5: 35, j6: 0, grip: 60 };
+        camControl.thetaGoal = 0.72;
+        camControl.phiGoal = 1.08;
+        camControl.radiusGoal = 11.2;
+        camControl.targetGoal.set(0, 3.1, 0);
+
+        document.getElementById('vis-motors').checked = true;
+        document.getElementById('vis-gears').checked = true;
+        document.getElementById('vis-skeleton').checked = true;
+        document.getElementById('vis-cables').checked = true;
+
+        applyShellAndLayerState();
+        applySectionState();
+        applyJointKinematics();
+      });
+
+      // Explode Controls
+      document.getElementById('explode-slider').addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value) / 100;
+        state.explodeFactor = v;
+        state.targetExplodeFactor = v;
+        applyExplodedState();
+      });
+
+      document.querySelectorAll('.explode-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.targetExplodeFactor = parseFloat(btn.dataset.explodePreset) / 100;
+        });
+      });
+
+      document.getElementById('exp-shell-slider').addEventListener('input', (e) => {
+        state.expShellMult = parseFloat(e.target.value) / 100;
+        document.getElementById('exp-shell-val').textContent = `${e.target.value}%`;
+        applyExplodedState();
+      });
+
+      document.getElementById('exp-gear-slider').addEventListener('input', (e) => {
+        state.expGearMult = parseFloat(e.target.value) / 100;
+        document.getElementById('exp-gear-val').textContent = `${e.target.value}%`;
+        applyExplodedState();
+      });
+
+      document.getElementById('exp-gripper-slider').addEventListener('input', (e) => {
+        state.expGripperMult = parseFloat(e.target.value) / 100;
+        document.getElementById('exp-gripper-val').textContent = `${e.target.value}%`;
+        applyExplodedState();
+      });
+
+      document.getElementById('toggle-explode-lines').addEventListener('change', (e) => {
+        state.showExplodeLines = e.target.checked;
+        applyExplodedState();
+      });
+
+      // Shell & Transparency Controls
+      document.querySelectorAll('.shell-mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const mode = btn.dataset.shellMode;
+          state.shellMode = mode;
+          if (mode === 'solid') state.shellOpacity = 1.0;
+          else if (mode === 'xray') state.shellOpacity = 0.22;
+          else if (mode === 'wireframe') state.shellOpacity = 0.55;
+          else if (mode === 'hidden') state.shellOpacity = 0.0;
+          applyShellAndLayerState();
+        });
+      });
+
+      document.getElementById('shell-opacity-slider').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value) / 100;
+        state.shellOpacity = val;
+        if (val <= 0.01) state.shellMode = 'hidden';
+        else if (val < 0.98 && state.shellMode === 'solid') state.shellMode = 'xray';
+        else if (val >= 0.98 && state.shellMode === 'xray') state.shellMode = 'solid';
+        applyShellAndLayerState();
+      });
+
+      document.getElementById('vis-motors').addEventListener('change', (e) => {
+        state.visMotors = e.target.checked;
+        applyShellAndLayerState();
+      });
+      document.getElementById('vis-gears').addEventListener('change', (e) => {
+        state.visGears = e.target.checked;
+        applyShellAndLayerState();
+      });
+      document.getElementById('vis-skeleton').addEventListener('change', (e) => {
+        state.visSkeleton = e.target.checked;
+        applyShellAndLayerState();
+      });
+      document.getElementById('vis-cables').addEventListener('change', (e) => {
+        state.visCables = e.target.checked;
+        applyShellAndLayerState();
+      });
+
+      // Section View Controls
+      document.getElementById('section-enable-toggle').addEventListener('change', (e) => {
+        state.sectionEnabled = e.target.checked;
+        applySectionState();
+      });
+
+      document.querySelectorAll('.section-axis-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.sectionAxis = btn.dataset.axis;
+          state.sectionEnabled = true;
+          if (state.sectionAxis === 'y' && Math.abs(state.sectionOffset) < 0.2) {
+            state.sectionOffset = 2.6;
+          } else if (state.sectionAxis !== 'y' && Math.abs(state.sectionOffset - 2.6) < 0.1) {
+            state.sectionOffset = 0.0;
+          }
+          applySectionState();
+        });
+      });
+
+      document.getElementById('section-flip-btn').addEventListener('click', () => {
+        state.sectionFlip = !state.sectionFlip;
+        state.sectionEnabled = true;
+        applySectionState();
+      });
+
+      document.getElementById('section-pos-slider').addEventListener('input', (e) => {
+        state.sectionOffset = parseFloat(e.target.value) / 100;
+        state.sectionEnabled = true;
+        applySectionState();
+      });
+
+      document.getElementById('section-center-btn').addEventListener('click', () => {
+        state.sectionOffset = state.sectionAxis === 'y' ? 2.5 : 0.0;
+        state.sectionEnabled = true;
+        applySectionState();
+      });
+
+      document.getElementById('section-helper-toggle').addEventListener('change', (e) => {
+        state.showSectionHelper = e.target.checked;
+        applySectionState();
+      });
+
+      document.getElementById('section-highlight-toggle').addEventListener('change', (e) => {
+        state.sectionHighlight = e.target.checked;
+        applySectionState();
+      });
+
+      // Joint Controls
+      ['j1', 'j2', 'j3', 'j4', 'j5', 'j6'].forEach((k) => {
+        document.getElementById(`${k}-slider`).addEventListener('input', (e) => {
+          state.autoDemo = false;
+          updateAutoDemoButton();
+          state.joints[k] = parseFloat(e.target.value);
+          applyJointKinematics();
+        });
+      });
+
+      document.getElementById('grip-slider').addEventListener('input', (e) => {
+        state.joints.grip = parseFloat(e.target.value);
+        applyJointKinematics();
+      });
+
+      function updateAutoDemoButton() {
+        const btn = document.getElementById('auto-demo-btn');
+        if (state.autoDemo) {
+          btn.textContent = '⏸ 停止巡航';
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/25 text-amber-300 border border-amber-500/50 transition';
+        } else {
+          btn.textContent = '▶ 自动巡航';
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition';
+        }
+      }
+
+      document.getElementById('auto-demo-btn').addEventListener('click', () => {
+        state.autoDemo = !state.autoDemo;
+        updateAutoDemoButton();
+      });
+
+      document.getElementById('home-pose-btn').addEventListener('click', () => {
+        state.autoDemo = false;
+        updateAutoDemoButton();
+        state.joints = { j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, grip: 50 };
+        applyJointKinematics();
+      });
+
+      // Camera View Presets
+      document.querySelectorAll('.cam-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const preset = btn.dataset.cam;
+          if (preset === 'iso') {
+            camControl.thetaGoal = 0.72;
+            camControl.phiGoal = 1.08;
+            camControl.radiusGoal = 11.2;
+            camControl.targetGoal.set(0, 3.1, 0);
+          } else if (preset === 'front') {
+            camControl.thetaGoal = 0.0;
+            camControl.phiGoal = Math.PI / 2 - 0.08;
+            camControl.radiusGoal = 10.8;
+            camControl.targetGoal.set(0.6, 3.1, 0);
+          } else if (preset === 'side') {
+            camControl.thetaGoal = Math.PI / 2;
+            camControl.phiGoal = Math.PI / 2 - 0.08;
+            camControl.radiusGoal = 10.8;
+            camControl.targetGoal.set(0, 3.1, 0);
+          } else if (preset === 'top') {
+            camControl.thetaGoal = 0.0;
+            camControl.phiGoal = 0.18;
+            camControl.radiusGoal = 13.0;
+            camControl.targetGoal.set(0.5, 2.5, 0);
+          } else if (preset === 'wrist') {
+            camControl.thetaGoal = 0.55;
+            camControl.phiGoal = 1.15;
+            camControl.radiusGoal = 5.2;
+            camControl.targetGoal.set(1.8, 3.8, 0.2);
+          }
+        });
+      });
+
+      // Combined Engineering Showcase Presets
+      document.querySelectorAll('.combo-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const combo = btn.dataset.combo;
+          if (combo === 'standard') {
+            state.targetExplodeFactor = 0.0;
+            state.shellMode = 'solid';
+            state.shellOpacity = 1.0;
+            state.sectionEnabled = false;
+            state.autoDemo = false;
+          } else if (combo === 'exploded-xray') {
+            state.targetExplodeFactor = 0.85;
+            state.shellMode = 'xray';
+            state.shellOpacity = 0.25;
+            state.sectionEnabled = false;
+            switchTab('tab-explode');
+          } else if (combo === 'internal-cut') {
+            state.targetExplodeFactor = 0.15;
+            state.shellMode = 'solid';
+            state.shellOpacity = 1.0;
+            state.sectionEnabled = true;
+            state.sectionAxis = 'z';
+            state.sectionOffset = 0.0;
+            switchTab('tab-section');
+          } else if (combo === 'kinematic-xray') {
+            state.targetExplodeFactor = 0.0;
+            state.shellMode = 'xray';
+            state.shellOpacity = 0.20;
+            state.sectionEnabled = false;
+            state.autoDemo = true;
+            switchTab('tab-joints');
+          }
+          updateAutoDemoButton();
+          applyShellAndLayerState();
+          applySectionState();
+        });
+      });
+
+      // Window Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // ==========================================
+      // 12. INITIALIZATION & ANIMATION LOOP
+      // ==========================================
+      applyShellAndLayerState();
+      applySectionState();
+      applyJointKinematics();
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        // Smooth interpolation for explosion slider presets
+        if (Math.abs(state.explodeFactor - state.targetExplodeFactor) > 0.001) {
+          state.explodeFactor += (state.targetExplodeFactor - state.explodeFactor) * 0.12;
+          applyExplodedState();
+        }
+
+        // Auto Kinematic Patrol Demo
+        if (state.autoDemo) {
+          state.demoTime += 0.022;
+          const t = state.demoTime;
+          state.joints.j1 = Math.sin(t * 0.7) * 65;
+          state.joints.j2 = -15 + Math.sin(t * 1.1) * 28;
+          state.joints.j3 = 40 + Math.cos(t * 1.1) * 32;
+          state.joints.j4 = Math.sin(t * 1.6) * 80;
+          state.joints.j5 = 30 + Math.sin(t * 1.3) * 35;
+          state.joints.j6 = (state.joints.j6 + 2.5) % 360;
+          state.joints.grip = 50 + Math.sin(t * 2.4) * 42;
+          applyJointKinematics();
+        }
+
+        updateCameraTransform();
+        renderer.render(scene, camera);
+        updateAnnotations();
+      }
+
+      window.onload = () => {
+        animate();
+      };
+    })();
+  </script>
+</body>
+</html>
